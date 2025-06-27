@@ -1,13 +1,13 @@
 // --- Motor Driver Pins (L298N) ---
 // Left Motor pins
 const int ENAL = 9; // PWM pin for Left Motor speed
-const int IN1L = 4;  // Left Motor Direction Pin 1
-const int IN2L = 5;  // Left Motor Direction Pin 2
+const int IN1L = 8;  // Left Motor Direction Pin 1
+const int IN2L = 7;  // Left Motor Direction Pin 2
 
 // Right Motor pins
 const int ENAR = 10;  // PWM pin for Right Motor speed
-const int IN3R = 7;  // Right Motor Direction Pin 1
-const int IN4R = 8;  // Right Motor Direction Pin 2
+const int IN3R = 5;  // Right Motor Direction Pin 1
+const int IN4R = 4;  // Right Motor Direction Pin 2
 
 // --- Encoder Pins and Variables ---
 const int LEFT_ENCODER_PIN = 3;  // Connect Left Encoder to Digital Pin 3 (Interrupt 1)
@@ -34,9 +34,12 @@ const unsigned long STABILIZE_TIME_MS = 500;
 const unsigned long MEASURE_TIME_MS = 300; // Measure for 1 second
 
 void setup() {
-  Serial.begin(9600);
-  Serial.println("PWM,RPM_Left,RPM_Right"); // Header for CSV data
-  Serial.println("Starting Dual Motor Characterization...");
+  Serial1.begin(9600); // USB debug (optional)
+  Serial1.begin(9600); // Bluetooth comm
+
+  Serial1.println("PWM,RPM_Left,RPM_Right");
+  Serial1.println("Starting Dual Motor Characterization...");
+
 
   // Motor Driver Pin Setup for LEFT Motor
   pinMode(ENAL, OUTPUT);
@@ -62,12 +65,13 @@ void setup() {
   digitalWrite(IN3R, LOW);
   digitalWrite(IN4R, LOW);
   analogWrite(ENAR, 0);
-  delay(1000);
+  delay(15000);
 }
 
 void loop() {
   // Loop through different PWM values
-  Serial.println("PWM,RPM_Left,RPM_Right");
+  Serial1.println("PWM,RPM_Left,RPM_Right");
+  delay(5000);
   
   for (int currentPWM = PWM_START; currentPWM <= PWM_END; currentPWM += PWM_STEP) {
     // 1. Apply PWM and set direction for BOTH motors (Forward)
@@ -79,8 +83,8 @@ void loop() {
     digitalWrite(IN4R, LOW);
     analogWrite(ENAR, currentPWM);
 
-    Serial.print("Applying PWM: ");
-    Serial.println(currentPWM);
+    Serial1.print("Applying PWM: ");
+    Serial1.println(currentPWM);
 
     // 2. Wait for motor speeds to stabilize
     delay(STABILIZE_TIME_MS);
@@ -105,14 +109,14 @@ void loop() {
     float currentRPM_Left = (float)pulsesLeft / PPR / (MEASURE_TIME_MS / 60000.0);
     float currentRPM_Right = (float)pulsesRight / PPR / (MEASURE_TIME_MS / 60000.0);
 
-    // 5. Send data over Serial (CSV format)
-    Serial.print(currentPWM);
-    Serial.print(",");
-    Serial.print(currentRPM_Left);
-    Serial.print(",");
-    Serial.println(currentRPM_Right);
+    // 5. Send data over Serial1 (CSV format)
+    Serial1.print(currentPWM);
+    Serial1.print(",");
+    Serial1.print(currentRPM_Left);
+    Serial1.print(",");
+    Serial1.println(currentRPM_Right);
 
-    // Add a small delay between steps to allow serial buffer to clear and for observation
+    // Add a small delay between steps to allow Serial1 buffer to clear and for observation
     delay(100);
   }
 
@@ -124,7 +128,7 @@ void loop() {
   digitalWrite(IN3R, LOW);
   digitalWrite(IN4R, LOW);
   analogWrite(ENAR, 0);
-  Serial.println("Characterization Complete. Motors Stopped.");
+  Serial1.println("Characterization Complete. Motors Stopped.");
 
   // Keep the loop from repeating constantly; you can reset Arduino to run again
   while(true);

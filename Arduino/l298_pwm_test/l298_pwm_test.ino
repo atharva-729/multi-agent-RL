@@ -39,77 +39,82 @@ void setup() {
 void loop() {
   // --- Test Left Motors (Forward) ---
   Serial.println("\nTesting Left Motors: FORWARD");
-  digitalWrite(IN1L, HIGH); // Set direction forward
-  digitalWrite(IN2L, LOW);
-
-  for (int pwmValue = 60; pwmValue <= 255; pwmValue += 5) { // Sweep PWM from 0 to 255
-    analogWrite(ENAL, pwmValue); // Apply PWM
-    Serial.print("Left Forward PWM: ");
-    Serial.println(pwmValue);
-    delay(sweepDelay);
-  }
-  delay(stopDelay); // Wait at full speed
-
-  // Stop Left Motors
-  Serial.println("Stopping Left Motors.");
-  analogWrite(ENAL, 0); // Set PWM to 0
-  delay(stopDelay);
-
-  // --- Test Left Motors (Backward) ---
-  Serial.println("Testing Left Motors: BACKWARD");
-  digitalWrite(IN1L, LOW); // Set direction backward
-  digitalWrite(IN2L, HIGH);
-
-  for (int pwmValue = 0; pwmValue <= 255; pwmValue += 5) { // Sweep PWM from 0 to 255
-    analogWrite(ENAL, pwmValue); // Apply PWM
-    Serial.print("Left Backward PWM: ");
-    Serial.println(pwmValue);
-    delay(sweepDelay);
-  }
-  delay(stopDelay); // Wait at full speed
-
-  // Stop Left Motors
-  Serial.println("Stopping Left Motors.");
-  digitalWrite(IN1L, LOW); // Reset direction pins to LOW for a clean stop
-  digitalWrite(IN2L, LOW);
-  analogWrite(ENAL, 0);
-  delay(stopDelay * 2); // Longer stop before next motor
-
-  // --- Test Right Motors (Forward) ---
-  Serial.println("Testing Right Motors: FORWARD");
   digitalWrite(IN3R, HIGH); // Set direction forward
   digitalWrite(IN4R, LOW);
+  analogWrite(ENAR, 255);
 
-  for (int pwmValue = 0; pwmValue <= 255; pwmValue += 5) { // Sweep PWM from 0 to 255
-    analogWrite(ENAR, pwmValue); // Apply PWM
-    Serial.print("Right Forward PWM: ");
-    Serial.println(pwmValue);
-    delay(sweepDelay);
-  }
-  delay(stopDelay); // Wait at full speed
+  digitalWrite(IN1L, HIGH); // Set direction forward
+  digitalWrite(IN2L, LOW);
+  analogWrite(ENAL, 255);
 
-  // Stop Right Motors
-  Serial.println("Stopping Right Motors.");
-  analogWrite(ENAR, 0);
-  delay(stopDelay);
+  // for (int pwmValue = 60; pwmValue <= 255; pwmValue += 5) { // Sweep PWM from 0 to 255
+  //   analogWrite(ENAL, pwmValue); // Apply PWM
+  //   Serial.print("Left Forward PWM: ");
+  //   Serial.println(pwmValue);
+  //   delay(sweepDelay);
+  // }
+  // delay(stopDelay); // Wait at full speed
 
-  // --- Test Right Motors (Backward) ---
-  Serial.println("Testing Right Motors: BACKWARD");
-  digitalWrite(IN3R, LOW); // Set direction backward
-  digitalWrite(IN4R, HIGH);
+  // // Stop Left Motors
+  // Serial.println("Stopping Left Motors.");
+  // analogWrite(ENAL, 0); // Set PWM to 0
+  // delay(stopDelay);
 
-  for (int pwmValue = 0; pwmValue <= 255; pwmValue += 5) { // Sweep PWM from 0 to 255
-    analogWrite(ENAR, pwmValue); // Apply PWM
-    Serial.print("Right Backward PWM: ");
-    Serial.println(pwmValue);
-    delay(sweepDelay);
-  }
-  delay(stopDelay); // Wait at full speed
+  // // --- Test Left Motors (Backward) ---
+  // Serial.println("Testing Left Motors: BACKWARD");
+  // digitalWrite(IN1L, LOW); // Set direction backward
+  // digitalWrite(IN2L, HIGH);
 
-  // Stop Right Motors
-  Serial.println("Stopping Right Motors.");
-  digitalWrite(IN3R, LOW); // Reset direction pins to LOW for a clean stop
-  digitalWrite(IN4R, LOW);
-  analogWrite(ENAR, 0);
-  delay(stopDelay * 3); // Longer stop before repeating the whole sequence
+  // for (int pwmValue = 0; pwmValue <= 255; pwmValue += 5) { // Sweep PWM from 0 to 255
+  //   analogWrite(ENAL, pwmValue); // Apply PWM
+  //   Serial.print("Left Backward PWM: ");
+  //   Serial.println(pwmValue);
+  //   delay(sweepDelay);
+  // }
+  // delay(stopDelay); // Wait at full speed
+
+  // // Stop Left Motors
+  // Serial.println("Stopping Left Motors.");
+  // digitalWrite(IN1L, LOW); // Reset direction pins to LOW for a clean stop
+  // digitalWrite(IN2L, LOW);
+  // analogWrite(ENAL, 0);
+  // delay(stopDelay * 2); // Longer stop before next motor
+
+  // // --- Test Right Motors (Forward) ---
+  // Serial.println("Testing Right Motors: FORWARD");
+  // digitalWrite(IN3R, HIGH); // Set direction forward
+  // digitalWrite(IN4R, LOW);
+
+  // for (int pwmValue = 0; pwmValue <= 255; pwmValue += 5) { // Sweep PWM from 0 to 255
+  //   analogWrite(ENAR, pwmValue); // Apply PWM
+  //   Serial.print("Right Forward PWM: ");
+  //   Serial.println(pwmValue);
+  //   delay(sweepDelay);
+  // }
+  // delay(stopDelay); // Wait at full speed
+
+  // // Stop Right Motors
+  // Serial.println("Stopping Right Motors.");
+  // analogWrite(ENAR, 0);
+  // delay(stopDelay);
+
+  // // --- Test Right Motors (Backward) ---
+  // Serial.println("Testing Right Motors: BACKWARD");
+  // digitalWrite(IN3R, LOW); // Set direction backward
+  // digitalWrite(IN4R, HIGH);
+
+  // for (int pwmValue = 0; pwmValue <= 255; pwmValue += 5) { // Sweep PWM from 0 to 255
+  //   analogWrite(ENAR, pwmValue); // Apply PWM
+  //   Serial.print("Right Backward PWM: ");
+  //   Serial.println(pwmValue);
+  //   delay(sweepDelay);
+  // }
+  // delay(stopDelay); // Wait at full speed
+
+  // // Stop Right Motors
+  // Serial.println("Stopping Right Motors.");
+  // digitalWrite(IN3R, LOW); // Reset direction pins to LOW for a clean stop
+  // digitalWrite(IN4R, LOW);
+  // analogWrite(ENAR, 0);
+  // delay(stopDelay * 3); // Longer stop before repeating the whole sequence
 }

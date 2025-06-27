@@ -1,11 +1,11 @@
 // --- Motor Driver Pins (L298N) ---
 // Left Motor pins (will be kept off in this sketch)
-const int ENAL = 10; // PWM pin for Left Motor speed (Connect to L298N ENB)
+const int ENAL = 9; // PWM pin for Left Motor speed (Connect to L298N ENB)
 const int IN1L = 8;  // Left Motor Direction Pin 1 (Connect to L298N IN3)
 const int IN2L = 7;  // Left Motor Direction Pin 2 (Connect to L298N IN4)
 
 // Right Motor pins (controlled in this sketch)
-const int ENAR = 9;  // PWM pin for Right Motor speed
+const int ENAR = 10;  // PWM pin for Right Motor speed
 const int IN3R = 5;  // Right Motor Direction Pin 1
 const int IN4R = 4;  // Right Motor Direction Pin 2
 

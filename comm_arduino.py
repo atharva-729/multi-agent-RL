@@ -1,7 +1,7 @@
 import serial
 import time
 
-bt = serial.Serial('COM8', 9600)  # Replace with your actual HC-05 port
+bt = serial.Serial('COM9', 9600)  # Replace with your actual HC-05 port
 print("Listening for data from Arduino via Bluetooth...")
 
 try:

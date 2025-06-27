@@ -1,7 +1,7 @@
 import serial
 import time
 
-ser = serial.Serial('COM8', 9600)
+ser = serial.Serial('COM10', 9600)
 try:
     while True:
         ser.write(b'F')

@@ -13,9 +13,9 @@ const int enB = 10; // Enable pin for Motor B (PWM for speed control) - CONNECT 
 
 // --- TCRT5000 Sensor Pins ---
 // Left Encoder: Digital Output D0 connected to Arduino Digital Pin 2
-const int TCRT5000_PIN_LEFT = 2;
+const int TCRT5000_PIN_LEFT = 3;
 // Right Encoder: Digital Output D0 connected to Arduino Digital Pin 3
-const int TCRT5000_PIN_RIGHT = 3;
+const int TCRT5000_PIN_RIGHT = 2;
 
 // --- Encoder Variables (Left Side) ---
 volatile long pulseCountLeft = 0;

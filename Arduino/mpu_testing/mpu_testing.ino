@@ -5,7 +5,7 @@
 Adafruit_MPU6050 mpu;
 
 void setup(void) {
-  Serial.begin(115200); // Set your Serial Monitor and Plotter to this baud rate
+  Serial.begin(9600); // Set your Serial Monitor and Plotter to this baud rate
 
   // Try to initialize MPU6050
   if (!mpu.begin()) {
@@ -21,7 +21,7 @@ void setup(void) {
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
 
   // Set gyro range to +- 500 deg/s (Good for general rotation)
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setGyroRange(MPU6050_RANGE_250_DEG);
 
   // Set filter bandwidth to 21 Hz (Filters out high-frequency noise)
   mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
