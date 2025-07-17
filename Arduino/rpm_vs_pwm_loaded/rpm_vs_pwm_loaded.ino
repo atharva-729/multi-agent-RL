@@ -65,13 +65,13 @@ void setup() {
   digitalWrite(IN3R, LOW);
   digitalWrite(IN4R, LOW);
   analogWrite(ENAR, 0);
-  delay(15000);
+  delay(25000);
 }
 
 void loop() {
   // Loop through different PWM values
   Serial1.println("PWM,RPM_Left,RPM_Right");
-  delay(5000);
+  // delay(5000);
   
   for (int currentPWM = PWM_START; currentPWM <= PWM_END; currentPWM += PWM_STEP) {
     // 1. Apply PWM and set direction for BOTH motors (Forward)

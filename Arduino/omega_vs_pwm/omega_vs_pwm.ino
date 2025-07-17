@@ -3,12 +3,12 @@
 #include <Adafruit_Sensor.h>
 
 // --- Motor Driver Pins ---
-const int ENAL = 9;
-const int IN1L = 8;
-const int IN2L = 7;
-const int ENAR = 10;
-const int IN3R = 5;
-const int IN4R = 4;
+const int ENAL = 10;
+const int IN1L = 5;
+const int IN2L = 4;
+const int ENAR = 9;
+const int IN3R = 8;
+const int IN4R = 7;
 
 // --- PWM Sweep Settings ---
 const int PWM_START = 0;
@@ -43,10 +43,10 @@ void setup() {
 }
 
 void loop() {
-  for (int pwm = PWM_START; pwm <= PWM_END; pwm += PWM_STEP) {
+  for (int pwm = 150; pwm <= 150; pwm += PWM_STEP) {
     rotateInPlace(pwm);  // Rotate in place
 
-    delay(STABILIZE_TIME_MS);
+    delay(10000);
 
     float gz_sum = 0;
     int samples = 0;

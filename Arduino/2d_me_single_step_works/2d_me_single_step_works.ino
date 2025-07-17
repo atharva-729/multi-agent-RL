@@ -3,23 +3,8 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 
-#define TRIG_LEFT 43
-#define ECHO_LEFT 42
-#define TRIG_RIGHT 33
-#define ECHO_RIGHT 32
-
-#define POSITION_TOLERANCE_MM 20.0
+#define POSITION_TOLERANCE_MM 15.0
 #define MIN_MOVABLE_RPM 37.5
-
-#define OBSTACLE_THRESHOLD_CM 30
-#define MIN_VALID_DISTANCE 5
-#define INVALID_READING -1
-
-unsigned long lastSensorReadTime = 0;
-const unsigned long SENSOR_INTERVAL = 500; // ms
-
-int leftObstacleCounter = 0;
-int rightObstacleCounter = 0;
 
 Adafruit_MPU6050 mpu;
 
@@ -31,15 +16,6 @@ enum RobotState {
 };
 
 RobotState currentState = IDLE;
-
-float waypoints[][2] = {
-  {450.0, 0.0},
-  {450.0, 450.0},
-  {0.0, 450.0},
-  {0.0, 0.0} 
-};
-const int totalWaypoints = sizeof(waypoints) / sizeof(waypoints[0]);
-int currentWaypointIndex = 0;
 
 // L298N Motor Driver Pins
 const int ENAL = 9;
@@ -58,8 +34,6 @@ float yawAngle = 0.0;
 float yawBias = 0.0;
 unsigned long lastTime = 0;
 float lastYawError = 0.0;
-float yawErrorSum = 0.0;
-float lastYaw = 0.0;
 
 volatile long leftEncoderTicks = 0;
 volatile long rightEncoderTicks = 0;
@@ -82,7 +56,7 @@ float deltaDistRight = 0.0;
 float deltaDistance = 0.0;
 
 // --- PID Control Variables for LEFT Motor ---
-float Kp_L = 0.75;  // Proportional gain for Left Motor (adjust as needed)
+float Kp_L = 0.6;  // Proportional gain for Left Motor (adjust as needed)
 float Ki_L = 0.0;  // Integral gain for Left Motor (start with 0.0, tune later)
 float Kd_L = 0.2;  // Derivative gain for Left Motor (start with 0.0, tune later)
 
@@ -95,9 +69,9 @@ float derivative_Left = 0.0;
 float outputPWM_Left = 0.0; // This variable will be cumulatively updated
 
 // --- PID Control Variables for RIGHT Motor ---
-float Kp_R = 0.70;  // Proportional gain for Right Motor
+float Kp_R = 0.55;  // Proportional gain for Right Motor
 float Ki_R = 0.0;  // Integral gain for Right Motor
-float Kd_R = 0.25;  // Derivative gain for Right Motor
+float Kd_R = 0.3;  // Derivative gain for Right Motor
 
 float targetRPM_Right = 75.0; // Desired target RPM for Right Motor
 float currentRPM_Right = 0.0;
@@ -118,9 +92,8 @@ float Kd_pos = 0.0;  // Optional
 float Ki_pos = 0.0;  // really not needed
 
 float targetAngle = 0.0; //45.0 * (PI / 180.0);  // rotate 90 degrees
-float kpyaw = 0.8;        // proportional gain
-float kdyaw = 0.05;
-float kiyaw = 0.02;
+float kpyaw = 100;        // proportional gain
+float kdyaw = 25;
 float minPWM = 150.0;  // minimum PWM to overcome static friction
 
 float prevTargetRPM_Left = 0.0;
@@ -148,6 +121,7 @@ const int MIN_EFFECTIVE_PWM_R = 85; // For Right Motor (adjust if needed for 9V)
 // --- Position and Orientation ---
 float currentX = 0.0;
 float currentY = 0.0;
+float currentYaw = 0.0; // Current heading in radians
 
 float targetX = 0.0;
 float targetY = 0.0;
@@ -190,28 +164,10 @@ void calculateYawBias() {
   yawBias = sum / 200.0;
   Serial1.print("Yaw bias: ");
   Serial1.println(yawBias, 6);
-
-  lastTime = millis();
-  Serial1.print("lastTime in calculateBias: ");
-  Serial1.println(lastTime);
 }
 
-long getDistanceCM(int trigPin, int echoPin) {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
 
-  long duration = pulseIn(echoPin, HIGH, 40000); // 40 ms timeout
-  long distance = duration * 0.034 / 2.0;
 
-  if (distance < MIN_VALID_DISTANCE || duration == 0) {
-    return INVALID_READING;
-  }
-
-  return distance;
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
@@ -230,7 +186,6 @@ void setup() {
     Serial1.println("MPU6050 init failed!");
     while (1);
   }
-  // mpu.reset();
 
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
   mpu.setGyroRange(MPU6050_RANGE_250_DEG);
@@ -241,11 +196,6 @@ void setup() {
   pinMode(RIGHT_ENCODER_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(RIGHT_ENCODER_PIN), rightEncoderISR, CHANGE);
 
-  pinMode(TRIG_LEFT, OUTPUT);
-  pinMode(ECHO_LEFT, INPUT);
-  pinMode(TRIG_RIGHT, OUTPUT);
-  pinMode(ECHO_RIGHT, INPUT);
-
   // Initialize both motors to stop
   stopMotors();
   
@@ -253,7 +203,7 @@ void setup() {
 
   calculateYawBias();
   lastTime = millis();
-  Serial1.println("Setup done.");
+  Serial1.println("Setup done. Starting rotation.");
 }
 
 
@@ -262,95 +212,29 @@ void setup() {
 ////////////////////////////////////////////////////////////////////////////
 float x_coord = 0.0;
 float y_coord = 0.0;
-bool newTargetReceived = false;
 
 
 void loop() {
 
-  // if (Serial1.available()) {
-  //   String input = Serial1.readStringUntil('\n');
-  //   input.trim();
+  if (Serial1.available()) {
+    String input = Serial1.readStringUntil('\n');
+    input.trim();
     
-  //   int commaIndex = input.indexOf(',');
-  //   if (commaIndex > 0) {
-  //     x_coord = input.substring(0, commaIndex).toFloat();
-  //     y_coord = input.substring(commaIndex + 1).toFloat();
-  //     currentState = IDLE; // remove this after demo
-  //    }
-  // delay(100);
-  // }
-  unsigned long now = millis();
-
-  if (now - lastSensorReadTime >= SENSOR_INTERVAL) {
-    lastSensorReadTime = now;
-
-    long distL = getDistanceCM(TRIG_LEFT, ECHO_LEFT);
-    delay(10); // wait before pinging next sensor
-    long distR = getDistanceCM(TRIG_RIGHT, ECHO_RIGHT);
-
-    Serial.print("left distance: ");
-    Serial.print(distL);
-    Serial.print(" | right distance: ");
-    Serial.println(distR);
-
-    // Check left
-    if (distL != INVALID_READING && distL < OBSTACLE_THRESHOLD_CM) {
-      leftObstacleCounter++;
-    } else {
-      leftObstacleCounter = 0;
-    }
-
-    // Check right
-    if (distR != INVALID_READING && distR < OBSTACLE_THRESHOLD_CM) {
-      rightObstacleCounter++;
-    } else {
-      rightObstacleCounter = 0;
-    }
-
-    // Debounced obstacle detection
-    if (leftObstacleCounter >= 2) {
-      Serial1.println("LEFT OBSTACLE DETECTED");
-      getPolar(currentX + 1, currentY + 1);
-    }
-
-    if (rightObstacleCounter >= 2) {
-      Serial1.println("RIGHT OBSTACLE DETECTED");
-      getPolar(currentX + 1, currentY + 1);
-    }
+    int commaIndex = input.indexOf(',');
+    if (commaIndex > 0) {
+      x_coord = input.substring(0, commaIndex).toFloat();
+      y_coord = input.substring(commaIndex + 1).toFloat();
+      currentState = IDLE; // remove this after demo
   }
-
-  // if (!(x_coord == 0.0 && y_coord == 0.0)) {
+  delay(100);
+}
+  if (!(x_coord == 0.0 && y_coord == 0.0)) {
     // State machine for 2D navigation
     switch (currentState) {
       case IDLE:
-      receiveCoordinates();
-
-      if (newTargetReceived) {
-        newTargetReceived = false;
+        stopMotors();
         getPolar(x_coord, y_coord);
-      }
-      break;
-
-      // /* this was for hardcoded coordinates
-        // if (currentWaypointIndex < totalWaypoints) {
-        //   // Set new target
-        //   x_coord = waypoints[currentWaypointIndex][0];
-        //   y_coord = waypoints[currentWaypointIndex][1];
-
-        //   Serial1.print("x_coord: ");
-        //   Serial1.print(x_coord);
-        //   Serial1.print(" | y_coord: ");
-        //   Serial1.println(y_coord);
-
-        //   // resetGyro();   // optional: reset yaw tracking
-        //   // resetEncoders();
-        //   getPolar(x_coord, y_coord);
-
-        // } else {
-        //   currentState = COMPLETED;
-        // }
-        // break;
-        // */
+        break;
 
       case ROTATING:
         controlRotation();
@@ -364,36 +248,16 @@ void loop() {
 
       case COMPLETED:
         stopMotors();
-        Serial1.println("Target reached!"); 
-        currentState = IDLE;
+        Serial1.print("Target reached!"); // Current position: (");
+        // Serial1.print(currentX);
+        // Serial1.print(", ");
+        // Serial1.print(currentY);
+        // Serial1.println(")");
         break;
     }
-  // }
-
-}
-
-void receiveCoordinates() {
-  static String inputString = "";
-  while (Serial1.available()) {
-    char inChar = Serial1.read();
-    if (inChar == '\n') {
-      int commaIndex = inputString.indexOf(',');
-      if (commaIndex != -1) {
-        x_coord = inputString.substring(0, commaIndex).toFloat();
-        y_coord = inputString.substring(commaIndex + 1).toFloat();
-        newTargetReceived = true;
-        Serial1.print("Received from laptop: ");
-        Serial1.print(x_coord);
-        Serial1.print(", ");
-        Serial1.println(y_coord);
-      }
-      inputString = ""; // clear after parsing
-    } else {
-      inputString += inChar;
-    }
   }
-}
 
+}
 
 void getPolar(float x, float y) {
   targetX = x;
@@ -402,15 +266,9 @@ void getPolar(float x, float y) {
     // Calculate polar coordinates
   float deltaX = targetX - currentX;
   float deltaY = targetY - currentY;
-
-  currentX = targetX;
-  currentY = targetY;
-
-  // yawAngle = targetAngle;  // to tackle drift when going forward
   
   targetPos_mm = sqrt(deltaX * deltaX + deltaY * deltaY);
   targetAngle = atan2(deltaY, deltaX);
-  // targetAngle -= lastYaw;
   
   // // Normalize angle difference
   // float angleDiff = targetAngle - currentYaw;
@@ -428,78 +286,84 @@ void getPolar(float x, float y) {
   Serial1.println(" degrees");
   currentState = ROTATING;
   delay(50);
-  calculateYawBias();
+  return;
 }
 
 
 void controlRotation() {
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
   unsigned long currentTime = millis();
-  float dt = (currentTime - lastLoopTime) / 1000.0;
+  float dt = (currentTime - lastTime) / 1000.0;
+  lastTime = currentTime;
 
+  float correctedGz = g.gyro.z - yawBias;
+  yawAngle += correctedGz * dt;
 
-  // if (deltaTime_ms >= dt) {
-    lastLoopTime = currentTime;
-    sensors_event_t a, g, temp;
-    mpu.getEvent(&a, &g, &temp);
+  float error = targetAngle - yawAngle;
+  while (error > PI) error -= 2 * PI;
+  while (error < -PI) error += 2 * PI;
 
-    float correctedGz = g.gyro.z - yawBias;
-    yawAngle += correctedGz * dt;
-
-    float error = (targetAngle - yawAngle) * 180.0 / PI;
-    while (error > 180.0) error -= 2 * 180.0;
-    while (error < -180.0) error += 2 * 180.0;
-
-    if (abs(error) < 1.5) {  // ~2 degree tolerance
-      stopMotors();
-      Serial1.println("Rotation complete. Starting forward movement.");
-      Serial1.print("Yaw (deg): ");
-      Serial1.print(yawAngle * 180.0 / PI);
-      Serial1.print(" | Error: ");
-      Serial1.println(error);
-      currentState = MOVING_FORWARD;
-      delay(1000);
-      // yawAngle = targetAngle;
-      return;
-    }
-
-    yawErrorSum += error * dt;
-
-    yawErrorSum = constrain(yawErrorSum, -100, 100);  // Adjust bounds as needed
-
-    // --- Derivative term ---
-    float derivative = (error - lastYawError) / dt;
-    lastYawError = error;
-
-    // --- PID Output ---
-    float desiredGz = kpyaw * error + kdyaw * derivative + kiyaw * yawErrorSum;
-
-    // Cap desiredGz to a reasonable max (you can tune this)
-    desiredGz = constrain(desiredGz, -150, 150);
-
-    // Compute base PWM from linear regression
-    float pwm = (abs(desiredGz) - intercept) / slope;
-
-    if (desiredGz < 0) pwm = -pwm;
-
-    // Apply minimum PWM constraint
-    if (abs(pwm) < minPWM) {
-      pwm = (pwm > 0) ? minPWM : -minPWM;
-    }
-
-    pwm = constrain(pwm, -255, 255);
-    setMotorDirections(-pwm, pwm);  // rotate in place
-
-    // Debug output
+  if (abs(error) < 3.0 * PI / 180.0) {  // ~2 degree tolerance
+    stopMotors();
+    Serial1.println("Rotation complete. Starting forward movement.");
     Serial1.print("Yaw (deg): ");
     Serial1.print(yawAngle * 180.0 / PI);
     Serial1.print(" | Error: ");
-    Serial1.print(error);
-    Serial1.print(" | Gz actual: ");
-    Serial1.print(correctedGz * 180.0 / PI);
-    Serial1.print(" | Gz desired: ");
-    Serial1.print(desiredGz);
-    Serial1.print(" | PWM: ");
-    Serial1.println(pwm);
+    Serial1.println(error * 180.0 / PI);
+    currentState = MOVING_FORWARD;
+    delay(1000);
+    return;
+  }
+
+  //   if (abs(yawAngle) > abs(targetAngle)) {
+  //   stopMotors();
+  //   Serial1.println("Did not stop at target. Overshot. Had to stop.");
+  //   Serial1.print("Yaw (deg): ");
+  //   Serial1.print(yawAngle * 180.0 / PI);
+  //   Serial1.print(" | Error: ");
+  //   Serial1.println(error * 180.0 / PI);
+  //   currentState = MOVING_FORWARD;
+  //   delay(1000);
+  //   return;
+  // }
+
+  // Convert current angular error to deg/s desired yaw rate
+  float kdTerm = kdyaw * (error - lastYawError) / dt;
+  lastYawError = error;
+
+  float desiredGz = kpyaw * error + kdTerm;  // deg/s because correctedGz is in rad/s
+
+  // Cap desiredGz to a reasonable max (you can tune this)
+  desiredGz = constrain(desiredGz, -150, 150);
+
+  // Compute base PWM from linear regression
+  float pwm = (abs(desiredGz) - intercept) / slope;
+
+  if (desiredGz < 0) pwm = -pwm;
+
+  // Apply minimum PWM constraint
+  if (abs(pwm) < minPWM) {
+    pwm = (pwm > 0) ? minPWM : -minPWM;
+  }
+
+  pwm = constrain(pwm, -255, 255);
+  delay(50);
+  setMotorDirections(-pwm, pwm);  // rotate in place
+  delay(50);
+
+  // Debug output
+  Serial1.print("Yaw (deg): ");
+  Serial1.print(yawAngle * 180.0 / PI);
+  Serial1.print(" | Error: ");
+  Serial1.print(error * 180.0 / PI);
+  Serial1.print(" | Gz corr: ");
+  Serial1.print(correctedGz * 180.0 / PI);
+  Serial1.print(" | PWM: ");
+  Serial1.println(pwm);
+
+  delay(20);
 }
 
 void controlForward() {
@@ -525,7 +389,10 @@ void controlForward() {
     deltaDistRight = deltaRevRight * WHEEL_CIRCUM_MM;
 
     deltaDistance = (deltaDistLeft + deltaDistRight) / 2.0;
-
+    // Serial1.print("currentPos_mm: ");
+    // Serial1.print(currentPos_mm);
+    // Serial1.print(" | deltaDistance: ");
+    // Serial1.println(deltaDistance);
     currentPos_mm += deltaDistance;
 
     // --- Step 3: Check if Target Reached ---
@@ -538,6 +405,8 @@ void controlForward() {
 
       stopMotors();
 
+      // Serial1.print(currentTime);
+      // Serial1.print(",");
       Serial1.print(currentRPM_Left);
       Serial1.print(",");
       Serial1.print(0);
@@ -545,10 +414,9 @@ void controlForward() {
       Serial1.print(currentRPM_Right);
       Serial1.print(",");
       Serial1.println(0);
-
+      // targetAngle = 0.0;
+      // controlRotation();
       currentState = COMPLETED;
-      currentWaypointIndex++;
-      currentPos_mm = 0;
       return;
     }
 
@@ -621,14 +489,6 @@ void controlForward() {
     if (outputPWM_Right > 255) outputPWM_Right = 255;
     digitalWrite(IN3R, HIGH); digitalWrite(IN4R, LOW);
     analogWrite(ENAR, (int)outputPWM_Right);
-
-    if (posError < 35 && posError > POSITION_TOLERANCE_MM) {
-      digitalWrite(IN1L, HIGH); digitalWrite(IN2L, LOW);
-      analogWrite(ENAL, 85);
-
-      digitalWrite(IN3R, HIGH); digitalWrite(IN4R, LOW);
-      analogWrite(ENAR, 85);
-    }
 
     // --- Data Output ---
     Serial1.print("Time: ");

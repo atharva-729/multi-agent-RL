@@ -6,7 +6,7 @@ try:
     bt = serial.Serial('COM9', 9600)  # replace COMx with actual port
     print("your bluetooth device is connected")
     # List of coordinates to send
-    coords = [(600, 0)]
+    coords = [(600, 0)]  # change coordinates here
 
     for x, y in coords:
         # Send next coordinate

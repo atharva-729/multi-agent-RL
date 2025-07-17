@@ -3,23 +3,8 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 
-#define TRIG_LEFT 43
-#define ECHO_LEFT 42
-#define TRIG_RIGHT 33
-#define ECHO_RIGHT 32
-
 #define POSITION_TOLERANCE_MM 20.0
 #define MIN_MOVABLE_RPM 37.5
-
-#define OBSTACLE_THRESHOLD_CM 30
-#define MIN_VALID_DISTANCE 5
-#define INVALID_READING -1
-
-unsigned long lastSensorReadTime = 0;
-const unsigned long SENSOR_INTERVAL = 500; // ms
-
-int leftObstacleCounter = 0;
-int rightObstacleCounter = 0;
 
 Adafruit_MPU6050 mpu;
 
@@ -33,26 +18,32 @@ enum RobotState {
 RobotState currentState = IDLE;
 
 float waypoints[][2] = {
-  {450.0, 0.0},
-  {450.0, 450.0},
-  {0.0, 450.0},
-  {0.0, 0.0} 
+  {600.0, 0.0},
+  // {6.0, 6.0},
+  // {0.0, 6.0},
+  // {0.0, 0.0},
+  // {6.0, 0.0}
 };
 const int totalWaypoints = sizeof(waypoints) / sizeof(waypoints[0]);
 int currentWaypointIndex = 0;
 
 // L298N Motor Driver Pins
-const int ENAL = 9;
-const int IN1L = 8;
-const int IN2L = 7;
+const int ENAL = 10;
+const int IN1L = 5;
+const int IN2L = 4;
 
-const int ENAR = 10;
-const int IN3R = 5;
-const int IN4R = 4;
+const int ENAR = 9;
+const int IN3R = 8;
+const int IN4R = 7;
 
 // --- Encoder Pins and Variables ---
-const int LEFT_ENCODER_PIN = 3;  // Connect Left Encoder to Digital Pin 3 (Interrupt 1)
-const int RIGHT_ENCODER_PIN = 2; // Connect Right Encoder to Digital Pin 2 (Interrupt 0)
+// const int LEFT_ENCODER_PIN = 3;  // Connect Left Encoder to Digital Pin 3 (Interrupt 1)
+// const int RIGHT_ENCODER_PIN = 2; // Connect Right Encoder to Digital Pin 2 (Interrupt 0)
+
+const int LEFT_ANALOG_PIN = A0;
+const int RIGHT_ANALOG_PIN = A1;
+const int THRESHOLD = 500;
+const int PPR = 8;
 
 float yawAngle = 0.0;
 float yawBias = 0.0;
@@ -61,20 +52,23 @@ float lastYawError = 0.0;
 float yawErrorSum = 0.0;
 float lastYaw = 0.0;
 
-volatile long leftEncoderTicks = 0;
-volatile long rightEncoderTicks = 0;
+// volatile long leftEncoderTicks = 0;
+// volatile long rightEncoderTicks = 0;
 
 // Encoder properties
-const int PPR = 16; // Pulses Per Revolution of your encoder
-const unsigned long DEBOUNCE_DELAY_MS = 20; // Debounce for encoder interrupts
-volatile unsigned long lastPulseTimeLeft = 0;
-volatile unsigned long lastPulseTimeRight = 0;
+// const int PPR = 16; // Pulses Per Revolution of your encoder
+// const unsigned long DEBOUNCE_DELAY_MS = 20; // Debounce for encoder interrupts
+// volatile unsigned long lastPulseTimeLeft = 0;
+// volatile unsigned long lastPulseTimeRight = 0;
+
+int prevLeft = 0, prevRight = 0;
+long pulsesLeft = 0, pulsesRight = 0;
 
 unsigned long lastLoopTime = 0;
 const unsigned long LOOP_INTERVAL_MS = 200; // PID loop updates every 200ms
 
-long currentLeftTicks_copy = 0;
-long currentRightTicks_copy = 0;
+// long currentLeftTicks_copy = 0;
+// long currentRightTicks_copy = 0;
 float deltaRevLeft = 0.0;
 float deltaRevRight = 0.0;
 float deltaDistLeft = 0.0;
@@ -82,11 +76,11 @@ float deltaDistRight = 0.0;
 float deltaDistance = 0.0;
 
 // --- PID Control Variables for LEFT Motor ---
-float Kp_L = 0.75;  // Proportional gain for Left Motor (adjust as needed)
+float Kp_L = 0.7;  // Proportional gain for Left Motor (adjust as needed)
 float Ki_L = 0.0;  // Integral gain for Left Motor (start with 0.0, tune later)
-float Kd_L = 0.2;  // Derivative gain for Left Motor (start with 0.0, tune later)
+float Kd_L = 0.25;  // Derivative gain for Left Motor (start with 0.0, tune later)
 
-float targetRPM_Left = 75.0; // Desired target RPM for Left Motor
+float targetRPM_Left = 90; // Desired target RPM for Left Motor
 float currentRPM_Left = 0.0;
 float error_Left = 0.0;
 float prevError_Left = 0.0;
@@ -95,11 +89,11 @@ float derivative_Left = 0.0;
 float outputPWM_Left = 0.0; // This variable will be cumulatively updated
 
 // --- PID Control Variables for RIGHT Motor ---
-float Kp_R = 0.70;  // Proportional gain for Right Motor
+float Kp_R = 1.0;  // Proportional gain for Right Motor
 float Ki_R = 0.0;  // Integral gain for Right Motor
 float Kd_R = 0.25;  // Derivative gain for Right Motor
 
-float targetRPM_Right = 75.0; // Desired target RPM for Right Motor
+float targetRPM_Right = 90; // Desired target RPM for Right Motor
 float currentRPM_Right = 0.0;
 float error_Right = 0.0;
 float prevError_Right = 0.0;
@@ -113,37 +107,43 @@ float currentPos_mm = 0.0;
 float targetPos_mm = 0.0; // <-- You can change this later via Bluetooth if desired
 float posError = 0.0;
 float prevPosError = 0.0;
-float Kp_pos = 0.17;  // You will tune this
-float Kd_pos = 0.0;  // Optional
+
+// gains for position control
+float Kp_pos = 0.25;  // You will tune this
+float Kd_pos = 0.05;  // Optional
 float Ki_pos = 0.0;  // really not needed
 
+// gains for rotation control
 float targetAngle = 0.0; //45.0 * (PI / 180.0);  // rotate 90 degrees
-float kpyaw = 0.8;        // proportional gain
-float kdyaw = 0.05;
+float kpyaw = 0.5;        // proportional gain
+float kdyaw = 0.1;
 float kiyaw = 0.02;
-float minPWM = 150.0;  // minimum PWM to overcome static friction
+float minPWM = 80.0;  // minimum PWM to overcome static friction
 
 float prevTargetRPM_Left = 0.0;
 float prevTargetRPM_Right = 0.0;
 
 // Linear regression model: Gz = slope * PWM + intercept
-const float slope = 0.9368;
-const float intercept = -126.8446;
+const float slope = 1.4451;
+const float intercept = -96.1499;
 
 // --- Motor Characterization (Regression Lines) ---
-const float REGRESSION_SLOPE_L = 0.4523;
-const float REGRESSION_INTERCEPT_L = -3.0138;
+const float REGRESSION_SLOPE_L = 0.7528;
+const float REGRESSION_INTERCEPT_L = 10.2685;
 
-const float REGRESSION_SLOPE_R = 0.3636;
-const float REGRESSION_INTERCEPT_R = 12.2727;
+const float REGRESSION_SLOPE_R = 0.7180;
+const float REGRESSION_INTERCEPT_R = 11.3389;
 
 // --- PWM Output Limits ---
 const int MIN_PWM_OVERALL = 0; // Overall minimum PWM (0 for off)
 const int MAX_PWM_OVERALL = 255; // Overall maximum PWM
 
 // --- Minimum Effective PWM (Motor Deadband Compensation) ---
-const int MIN_EFFECTIVE_PWM_L = 85; // For Left Motor (adjust if needed for 9V)
-const int MIN_EFFECTIVE_PWM_R = 85; // For Right Motor (adjust if needed for 9V)
+const int MIN_EFFECTIVE_PWM_L = 50; // For Left Motor (adjust if needed for 9V)
+const int MIN_EFFECTIVE_PWM_R = 50; // For Right Motor (adjust if needed for 9V)
+
+unsigned long lastPIDTime = 0;
+const unsigned long PID_INTERVAL = 250; // ms
 
 // --- Position and Orientation ---
 float currentX = 0.0;
@@ -196,23 +196,6 @@ void calculateYawBias() {
   Serial1.println(lastTime);
 }
 
-long getDistanceCM(int trigPin, int echoPin) {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-
-  long duration = pulseIn(echoPin, HIGH, 40000); // 40 ms timeout
-  long distance = duration * 0.034 / 2.0;
-
-  if (distance < MIN_VALID_DISTANCE || duration == 0) {
-    return INVALID_READING;
-  }
-
-  return distance;
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
@@ -230,21 +213,20 @@ void setup() {
     Serial1.println("MPU6050 init failed!");
     while (1);
   }
+  Serial1.println("MPU6050 init done!");
   // mpu.reset();
 
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
   mpu.setGyroRange(MPU6050_RANGE_250_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
   
-  pinMode(LEFT_ENCODER_PIN, INPUT_PULLUP); // Use INPUT_PULLUP if encoder outputs open-collector/open-drain
-  attachInterrupt(digitalPinToInterrupt(LEFT_ENCODER_PIN), leftEncoderISR, CHANGE); // Trigger on any state change
-  pinMode(RIGHT_ENCODER_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(RIGHT_ENCODER_PIN), rightEncoderISR, CHANGE);
+  // pinMode(LEFT_ENCODER_PIN, INPUT_PULLUP); // Use INPUT_PULLUP if encoder outputs open-collector/open-drain
+  // attachInterrupt(digitalPinToInterrupt(LEFT_ENCODER_PIN), leftEncoderISR, CHANGE); // Trigger on any state change
+  // pinMode(RIGHT_ENCODER_PIN, INPUT_PULLUP);
+  // attachInterrupt(digitalPinToInterrupt(RIGHT_ENCODER_PIN), rightEncoderISR, CHANGE);
 
-  pinMode(TRIG_LEFT, OUTPUT);
-  pinMode(ECHO_LEFT, INPUT);
-  pinMode(TRIG_RIGHT, OUTPUT);
-  pinMode(ECHO_RIGHT, INPUT);
+  pinMode(LEFT_ANALOG_PIN, INPUT);
+  pinMode(RIGHT_ANALOG_PIN, INPUT);
 
   // Initialize both motors to stop
   stopMotors();
@@ -279,83 +261,46 @@ void loop() {
   //    }
   // delay(100);
   // }
-  unsigned long now = millis();
-
-  if (now - lastSensorReadTime >= SENSOR_INTERVAL) {
-    lastSensorReadTime = now;
-
-    long distL = getDistanceCM(TRIG_LEFT, ECHO_LEFT);
-    delay(10); // wait before pinging next sensor
-    long distR = getDistanceCM(TRIG_RIGHT, ECHO_RIGHT);
-
-    Serial.print("left distance: ");
-    Serial.print(distL);
-    Serial.print(" | right distance: ");
-    Serial.println(distR);
-
-    // Check left
-    if (distL != INVALID_READING && distL < OBSTACLE_THRESHOLD_CM) {
-      leftObstacleCounter++;
-    } else {
-      leftObstacleCounter = 0;
-    }
-
-    // Check right
-    if (distR != INVALID_READING && distR < OBSTACLE_THRESHOLD_CM) {
-      rightObstacleCounter++;
-    } else {
-      rightObstacleCounter = 0;
-    }
-
-    // Debounced obstacle detection
-    if (leftObstacleCounter >= 2) {
-      Serial1.println("LEFT OBSTACLE DETECTED");
-      getPolar(currentX + 1, currentY + 1);
-    }
-
-    if (rightObstacleCounter >= 2) {
-      Serial1.println("RIGHT OBSTACLE DETECTED");
-      getPolar(currentX + 1, currentY + 1);
-    }
-  }
 
   // if (!(x_coord == 0.0 && y_coord == 0.0)) {
     // State machine for 2D navigation
     switch (currentState) {
       case IDLE:
-      receiveCoordinates();
+      // receiveCoordinates();
 
-      if (newTargetReceived) {
-        newTargetReceived = false;
-        getPolar(x_coord, y_coord);
-      }
-      break;
+      // if (newTargetReceived) {
+      //   newTargetReceived = false;
+      //   getPolar(x_coord, y_coord);
+      // }
+      // break;
 
-      // /* this was for hardcoded coordinates
-        // if (currentWaypointIndex < totalWaypoints) {
-        //   // Set new target
-        //   x_coord = waypoints[currentWaypointIndex][0];
-        //   y_coord = waypoints[currentWaypointIndex][1];
+      // this was for hardcoded coordinates
+        if (currentWaypointIndex < totalWaypoints) {
+          // Set new target
+          x_coord = waypoints[currentWaypointIndex][0];
+          y_coord = waypoints[currentWaypointIndex][1];
 
-        //   Serial1.print("x_coord: ");
-        //   Serial1.print(x_coord);
-        //   Serial1.print(" | y_coord: ");
-        //   Serial1.println(y_coord);
+          Serial1.print("x_coord: ");
+          Serial1.print(x_coord);
+          Serial1.print(" | y_coord: ");
+          Serial1.println(y_coord);
 
-        //   // resetGyro();   // optional: reset yaw tracking
-        //   // resetEncoders();
-        //   getPolar(x_coord, y_coord);
+          // resetGyro();   // optional: reset yaw tracking
+          // resetEncoders();
+          getPolar(x_coord, y_coord);
 
-        // } else {
-        //   currentState = COMPLETED;
-        // }
-        // break;
-        // */
+        } else {
+          currentState = COMPLETED;
+        }
+        break;
+        //*/
 
       case ROTATING:
         controlRotation();
-        leftEncoderTicks = 0;
-        rightEncoderTicks = 0;
+        // leftEncoderTicks = 0;
+        // rightEncoderTicks = 0;
+        pulsesLeft = 0;
+        pulsesRight = 0;
         break;
 
       case MOVING_FORWARD:
@@ -364,7 +309,7 @@ void loop() {
 
       case COMPLETED:
         stopMotors();
-        Serial1.println("Target reached!"); 
+        // Serial1.println("Target reached!"); 
         currentState = IDLE;
         break;
     }
@@ -506,23 +451,32 @@ void controlForward() {
   unsigned long currentTime = millis();
   float deltaTime_ms = (float)(currentTime - lastLoopTime);
 
-  if (deltaTime_ms >= LOOP_INTERVAL_MS) {
-    lastLoopTime = currentTime;
+  unsigned long now = millis();
 
-    // --- Step 1: Read Encoder Ticks Safely ---
-    noInterrupts();
-    long currentLeftTicks_copy = leftEncoderTicks;
-    long currentRightTicks_copy = rightEncoderTicks;
-    leftEncoderTicks = 0;
-    rightEncoderTicks = 0;
-    interrupts();
+  // --- Rising edge detection ---
+  int leftVal = analogRead(LEFT_ANALOG_PIN);
+  int rightVal = analogRead(RIGHT_ANALOG_PIN);
+
+  if (leftVal > THRESHOLD && prevLeft <= THRESHOLD) pulsesLeft++;
+  if (rightVal > THRESHOLD && prevRight <= THRESHOLD) pulsesRight++;
+
+  prevLeft = leftVal;
+  prevRight = rightVal;
+
+  if (now - lastPIDTime >= PID_INTERVAL) {
+    currentRPM_Left = (float)pulsesLeft / PPR / (PID_INTERVAL / 60000.0);
+    currentRPM_Right = (float)pulsesRight / PPR / (PID_INTERVAL / 60000.0);
 
     // --- Step 2: Update Position (average of both wheels) ---
-    deltaRevLeft = (float)currentLeftTicks_copy / (float)PPR;
-    deltaRevRight = (float)currentRightTicks_copy / (float)PPR;
+    deltaRevLeft = (float)pulsesLeft / (float)PPR;
+    deltaRevRight = (float)pulsesRight / (float)PPR;
 
     deltaDistLeft = deltaRevLeft * WHEEL_CIRCUM_MM;
     deltaDistRight = deltaRevRight * WHEEL_CIRCUM_MM;
+
+    pulsesLeft = 0;
+    pulsesRight = 0;
+    lastPIDTime = now;
 
     deltaDistance = (deltaDistLeft + deltaDistRight) / 2.0;
 
@@ -581,7 +535,7 @@ void controlForward() {
 
 
     // --- Step 5: Velocity PID (Left) ---
-    currentRPM_Left = deltaRevLeft / (deltaTime_ms / 60000.0);
+    // currentRPM_Left = deltaRevLeft / (deltaTime_ms / 60000.0);
     float error_L = targetRPM_Left - currentRPM_Left;
     float basePWM_L = (targetRPM_Left - REGRESSION_INTERCEPT_L) / REGRESSION_SLOPE_L;
     if (targetRPM_Left != prevTargetRPM_Left && targetRPM_Left > 0) {
@@ -602,7 +556,7 @@ void controlForward() {
     analogWrite(ENAL, (int)outputPWM_Left);
 
     // --- Step 6: Velocity PID (Right) ---
-    currentRPM_Right = deltaRevRight / (deltaTime_ms / 60000.0);
+    // currentRPM_Right = deltaRevRight / (deltaTime_ms / 60000.0);
     float error_R = targetRPM_Right - currentRPM_Right;
     float basePWM_R = (targetRPM_Right - REGRESSION_INTERCEPT_R) / REGRESSION_SLOPE_R;
     if (targetRPM_Right != prevTargetRPM_Right && targetRPM_Right > 0) {
@@ -622,13 +576,13 @@ void controlForward() {
     digitalWrite(IN3R, HIGH); digitalWrite(IN4R, LOW);
     analogWrite(ENAR, (int)outputPWM_Right);
 
-    if (posError < 35 && posError > POSITION_TOLERANCE_MM) {
-      digitalWrite(IN1L, HIGH); digitalWrite(IN2L, LOW);
-      analogWrite(ENAL, 85);
+    // if (posError < 35 && posError > POSITION_TOLERANCE_MM) {
+    //   digitalWrite(IN1L, HIGH); digitalWrite(IN2L, LOW);
+    //   analogWrite(ENAL, MIN_EFFECTIVE_PWM_L);
 
-      digitalWrite(IN3R, HIGH); digitalWrite(IN4R, LOW);
-      analogWrite(ENAR, 85);
-    }
+    //   digitalWrite(IN3R, HIGH); digitalWrite(IN4R, LOW);
+    //   analogWrite(ENAR, MIN_EFFECTIVE_PWM_R);
+    // }
 
     // --- Data Output ---
     Serial1.print("Time: ");
@@ -652,20 +606,20 @@ void controlForward() {
 
 
 
-// --- Encoder Interrupt Service Routine (ISR) for LEFT Encoder ---
-void leftEncoderISR() {
-  unsigned long currentTime = millis();
-  if (currentTime - lastPulseTimeLeft > DEBOUNCE_DELAY_MS) {
-    leftEncoderTicks++;
-    lastPulseTimeLeft = currentTime;
-  }
-}
+// // --- Encoder Interrupt Service Routine (ISR) for LEFT Encoder ---
+// void leftEncoderISR() {
+//   unsigned long currentTime = millis();
+//   if (currentTime - lastPulseTimeLeft > DEBOUNCE_DELAY_MS) {
+//     leftEncoderTicks++;
+//     lastPulseTimeLeft = currentTime;
+//   }
+// }
 
-// --- Encoder Interrupt Service Routine (ISR) for RIGHT Encoder ---
-void rightEncoderISR() {
-  unsigned long currentTime = millis();
-  if (currentTime - lastPulseTimeRight > DEBOUNCE_DELAY_MS) {
-    rightEncoderTicks++;
-    lastPulseTimeRight = currentTime;
-  }
-}
+// // --- Encoder Interrupt Service Routine (ISR) for RIGHT Encoder ---
+// void rightEncoderISR() {
+//   unsigned long currentTime = millis();
+//   if (currentTime - lastPulseTimeRight > DEBOUNCE_DELAY_MS) {
+//     rightEncoderTicks++;
+//     lastPulseTimeRight = currentTime;
+//   }
+// }

@@ -65,7 +65,7 @@ float outputPWM_Right = 0.0; // This variable will be cumulatively updated
 // --- Position Control Parameters ---
 const float WHEEL_CIRCUM_MM = 219.9; // 70 mm dia
 float currentPos_mm = 0.0;
-float targetPos_mm = 1200.0; // <-- You can change this later via Bluetooth if desired
+float targetPos_mm = 600.0; // <-- You can change this later via Bluetooth if desired
 float posError = 0.0;
 float prevPosError = 0.0;
 float Kp_pos = 0.17;  // You will tune this

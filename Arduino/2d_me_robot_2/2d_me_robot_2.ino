@@ -3,11 +3,6 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 
-#define TRIG_LEFT 43
-#define ECHO_LEFT 42
-#define TRIG_RIGHT 33
-#define ECHO_RIGHT 32
-
 #define POSITION_TOLERANCE_MM 20.0
 #define MIN_MOVABLE_RPM 37.5
 
@@ -38,17 +33,18 @@ float waypoints[][2] = {
   {0.0, 450.0},
   {0.0, 0.0} 
 };
+
 const int totalWaypoints = sizeof(waypoints) / sizeof(waypoints[0]);
 int currentWaypointIndex = 0;
 
 // L298N Motor Driver Pins
-const int ENAL = 9;
-const int IN1L = 8;
-const int IN2L = 7;
+const int ENAL = 10;
+const int IN1L = 5;
+const int IN2L = 4;
 
-const int ENAR = 10;
-const int IN3R = 5;
-const int IN4R = 4;
+const int ENAR = 9;
+const int IN3R = 8;
+const int IN4R = 7;
 
 // --- Encoder Pins and Variables ---
 const int LEFT_ENCODER_PIN = 3;  // Connect Left Encoder to Digital Pin 3 (Interrupt 1)
@@ -82,11 +78,11 @@ float deltaDistRight = 0.0;
 float deltaDistance = 0.0;
 
 // --- PID Control Variables for LEFT Motor ---
-float Kp_L = 0.75;  // Proportional gain for Left Motor (adjust as needed)
+float Kp_L = 0.9;  // Proportional gain for Left Motor (adjust as needed)
 float Ki_L = 0.0;  // Integral gain for Left Motor (start with 0.0, tune later)
-float Kd_L = 0.2;  // Derivative gain for Left Motor (start with 0.0, tune later)
+float Kd_L = 0.15;  // Derivative gain for Left Motor (start with 0.0, tune later)
 
-float targetRPM_Left = 75.0; // Desired target RPM for Left Motor
+float targetRPM_Left = 56.25; // Desired target RPM for Left Motor
 float currentRPM_Left = 0.0;
 float error_Left = 0.0;
 float prevError_Left = 0.0;
@@ -95,11 +91,11 @@ float derivative_Left = 0.0;
 float outputPWM_Left = 0.0; // This variable will be cumulatively updated
 
 // --- PID Control Variables for RIGHT Motor ---
-float Kp_R = 0.70;  // Proportional gain for Right Motor
+float Kp_R = 0.95;  // Proportional gain for Right Motor
 float Ki_R = 0.0;  // Integral gain for Right Motor
-float Kd_R = 0.25;  // Derivative gain for Right Motor
+float Kd_R = 0.0;  // Derivative gain for Right Motor
 
-float targetRPM_Right = 75.0; // Desired target RPM for Right Motor
+float targetRPM_Right = 56.25; // Desired target RPM for Right Motor
 float currentRPM_Right = 0.0;
 float error_Right = 0.0;
 float prevError_Right = 0.0;
@@ -113,37 +109,40 @@ float currentPos_mm = 0.0;
 float targetPos_mm = 0.0; // <-- You can change this later via Bluetooth if desired
 float posError = 0.0;
 float prevPosError = 0.0;
-float Kp_pos = 0.17;  // You will tune this
-float Kd_pos = 0.0;  // Optional
+
+// gains for position control
+float Kp_pos = 0.25;  // You will tune this
+float Kd_pos = 0.05;  // Optional
 float Ki_pos = 0.0;  // really not needed
 
+// gains for rotation control
 float targetAngle = 0.0; //45.0 * (PI / 180.0);  // rotate 90 degrees
-float kpyaw = 0.8;        // proportional gain
-float kdyaw = 0.05;
+float kpyaw = 1.2;        // proportional gain
+float kdyaw = 0.1;
 float kiyaw = 0.02;
-float minPWM = 150.0;  // minimum PWM to overcome static friction
+float minPWM = 105.0;  // minimum PWM to overcome static friction
 
 float prevTargetRPM_Left = 0.0;
 float prevTargetRPM_Right = 0.0;
 
 // Linear regression model: Gz = slope * PWM + intercept
-const float slope = 0.9368;
-const float intercept = -126.8446;
+const float slope = 0.4222;
+const float intercept = -19.9526;
 
 // --- Motor Characterization (Regression Lines) ---
-const float REGRESSION_SLOPE_L = 0.4523;
-const float REGRESSION_INTERCEPT_L = -3.0138;
+const float REGRESSION_SLOPE_L = 0.2957;
+const float REGRESSION_INTERCEPT_L = 4.9861;
 
-const float REGRESSION_SLOPE_R = 0.3636;
-const float REGRESSION_INTERCEPT_R = 12.2727;
+const float REGRESSION_SLOPE_R = 0.3041;
+const float REGRESSION_INTERCEPT_R = 3.8851;
 
 // --- PWM Output Limits ---
 const int MIN_PWM_OVERALL = 0; // Overall minimum PWM (0 for off)
 const int MAX_PWM_OVERALL = 255; // Overall maximum PWM
 
 // --- Minimum Effective PWM (Motor Deadband Compensation) ---
-const int MIN_EFFECTIVE_PWM_L = 85; // For Left Motor (adjust if needed for 9V)
-const int MIN_EFFECTIVE_PWM_R = 85; // For Right Motor (adjust if needed for 9V)
+const int MIN_EFFECTIVE_PWM_L = 80; // For Left Motor (adjust if needed for 9V)
+const int MIN_EFFECTIVE_PWM_R = 80; // For Right Motor (adjust if needed for 9V)
 
 // --- Position and Orientation ---
 float currentX = 0.0;
@@ -249,7 +248,7 @@ void setup() {
   // Initialize both motors to stop
   stopMotors();
   
-  delay(15000);
+  delay(30000);
 
   calculateYawBias();
   lastTime = millis();
@@ -279,6 +278,7 @@ void loop() {
   //    }
   // delay(100);
   // }
+
   unsigned long now = millis();
 
   if (now - lastSensorReadTime >= SENSOR_INTERVAL) {
@@ -321,7 +321,7 @@ void loop() {
 
   // if (!(x_coord == 0.0 && y_coord == 0.0)) {
     // State machine for 2D navigation
-    switch (currentState) {
+    switch (currentState) {           // block for movement logic
       case IDLE:
       receiveCoordinates();
 
@@ -331,7 +331,7 @@ void loop() {
       }
       break;
 
-      // /* this was for hardcoded coordinates
+      // this was for hardcoded coordinates
         // if (currentWaypointIndex < totalWaypoints) {
         //   // Set new target
         //   x_coord = waypoints[currentWaypointIndex][0];
@@ -350,7 +350,7 @@ void loop() {
         //   currentState = COMPLETED;
         // }
         // break;
-        // */
+        // //*/
 
       case ROTATING:
         controlRotation();
@@ -624,10 +624,10 @@ void controlForward() {
 
     if (posError < 35 && posError > POSITION_TOLERANCE_MM) {
       digitalWrite(IN1L, HIGH); digitalWrite(IN2L, LOW);
-      analogWrite(ENAL, 85);
+      analogWrite(ENAL, MIN_EFFECTIVE_PWM_L);
 
       digitalWrite(IN3R, HIGH); digitalWrite(IN4R, LOW);
-      analogWrite(ENAR, 85);
+      analogWrite(ENAR, MIN_EFFECTIVE_PWM_R);
     }
 
     // --- Data Output ---

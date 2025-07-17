@@ -5,19 +5,19 @@
 Adafruit_MPU6050 mpu;
 
 // L298N Motor Driver Pins
-const int ENAL = 9;
-const int IN1L = 8;
-const int IN2L = 7;
+const int ENAL = 10;
+const int IN1L = 5;
+const int IN2L = 4;
 
-const int ENAR = 10;
-const int IN3R = 5;
-const int IN4R = 4;
+const int ENAR = 9;
+const int IN3R = 8;
+const int IN4R = 7;
 
 float yawAngle = 0.0;
 float yawBias = 0.0;
 unsigned long lastTime = 0;
 
-float targetAngle = 45.0 * (PI / 180.0);  // rotate 90 degrees
+float targetAngle = 90.0 * (PI / 180.0);  // rotate 90 degrees
 float kp = 150;        // proportional gain
 float minPWM = 155.0;  // minimum PWM to overcome static friction
 
@@ -77,7 +77,7 @@ void setup() {
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
   mpu.setGyroRange(MPU6050_RANGE_250_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-  delay(10000);
+  delay(15000);
 
   calculateYawBias();
   lastTime = millis();
@@ -99,7 +99,7 @@ void loop() {
   while (error > PI) error -= 2 * PI;
   while (error < -PI) error += 2 * PI;
 
-  if (abs(error) < 2.0 * PI / 180.0) {  // ~2 degree tolerance
+  if (abs(error) < 3.0 * PI / 180.0) {  // ~2 degree tolerance
     stopMotors();
     Serial1.println("Target reached. Stopping.");
     Serial1.print("Yaw (deg): ");
@@ -109,6 +109,16 @@ void loop() {
     while (true);
   }
 
+  // if (abs(yawAngle) > abs(targetAngle)) {
+  //   stopMotors();
+  //   Serial1.println("Did not stop at target. Overshot. Had to stop.");
+  //   Serial1.print("Yaw (deg): ");
+  //   Serial1.print(yawAngle * 180.0 / PI);
+  //   Serial1.print(" | Error: ");
+  //   Serial1.println(error * 180.0 / PI);
+  //   while (true);
+  // }
+
   // Convert current angular error to deg/s desired yaw rate
   float desiredGz = kp * error;  // deg/s because correctedGz is in rad/s
 
@@ -116,7 +126,9 @@ void loop() {
   desiredGz = constrain(desiredGz, -150, 150);
 
   // Compute base PWM from linear regression
-  float pwm = (desiredGz - intercept) / slope;
+  float pwm = (abs(desiredGz) - intercept) / slope;
+
+  if (desiredGz < 0) pwm = -pwm;
 
   // Apply minimum PWM constraint
   if (abs(pwm) < minPWM) {
