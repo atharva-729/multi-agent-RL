@@ -2,6 +2,45 @@
 # Multi-Agent Reinforcement Learning
 This project focuses on making three robots from scratch.
 
+---
+
+## Files in this Repository
+
+### Folder: `Arduino files`
+
+* Contains the Arduino sketches to be uploaded to the robots.
+* Each file is labeled for the respective robot.
+* Robot 3 has **two versions**: open loop control and closed loop control (not sure which one works best).
+* All files include comments and documentation.
+
+### Folder: `Development files`
+
+* Contains code and scripts used during development and hardware testing.
+* **Mainly for debugging purposes.**
+* You do **not** need any file from this folder to run the robots or the trained model.
+
+### File: `list of failure causes.md`
+
+* Lists the failure modes, effects, and causes.
+* Also includes the probabilities used to train the reinforcement learning model.
+
+### File: `precautions.md`
+
+* Lists important precautions related to the robot and hardware.
+* Covers all major components used in the robots.
+
+### File: `coordinate_control.py`
+
+* This is the Python script used to send coordinates to the robot.
+* The same script is used for all three robots — **only the COM port needs to be updated**.
+
+### File: `what to do.md`
+
+* Step-by-step guide for connecting the Bluetooth modules.
+* Also explains which code to run and in what order.
+
+---
+
 ### Arduino Pinout
 
 | **Component**                    | **Signal/Pin**           | **Connected to Arduino Mega Pin** | **Notes**                                |
