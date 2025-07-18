@@ -29,4 +29,4 @@ except KeyboardInterrupt:
     print("\nProgram interrupted by user.")
     bt.close()
 finally:
-    print("lol")
+    print("Try connecting again (if you see an error above this message).")
