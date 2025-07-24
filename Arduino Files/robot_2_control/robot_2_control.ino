@@ -173,6 +173,8 @@ float x_coord = 0.0;   // Coordinates sent via Bluetooth
 float y_coord = 0.0;
 bool newTargetReceived = false;  // Flag for Bluetooth waypoint update
 
+bool obstacleFlag = false;
+
 
 // ======================= Motor Driver Helper Functions ====================
 
@@ -305,10 +307,10 @@ void loop() {
     long distR = getDistanceCM(TRIG_RIGHT, ECHO_RIGHT);
 
     // Debug print distances
-    Serial.print("left distance: ");
-    Serial.print(distL);
-    Serial.print(" | right distance: ");
-    Serial.println(distR);
+    // Serial.print("left distance: ");
+    // Serial.print(distL);
+    // Serial.print(" | right distance: ");
+    // Serial.println(distR);
 
     // Debounced left obstacle detection
     if (distL != INVALID_READING && distL < OBSTACLE_THRESHOLD_CM) {
@@ -325,15 +327,21 @@ void loop() {
     }
 
     // Confirmed left obstacle
-    if (leftObstacleCounter >= 2) {
-      Serial1.println("LEFT OBSTACLE DETECTED");
-      getPolar(currentX + 1, currentY + 1); // Placeholder behaviour
+    if (leftObstacleCounter >= 2 && currentState == MOVING_FORWARD) {
+      Serial1.println("LEFT OBSTACLE DETECTED. Rotating 90 degrees clockwise.");
+      // getPolar(currentX + 1, currentY + 1); // Placeholder behaviour
+      targetAngle -= PI/2;
+      currentState = ROTATING;
+      obstacleFlag = true;
     }
 
     // Confirmed right obstacle
-    if (rightObstacleCounter >= 2) {
-      Serial1.println("RIGHT OBSTACLE DETECTED");
-      getPolar(currentX + 1, currentY + 1); // Placeholder behaviour
+    if (rightObstacleCounter >= 2 && currentState == MOVING_FORWARD) {
+      Serial1.println("RIGHT OBSTACLE DETECTED. Rotating 90 degrees anticlockwise.");
+      // getPolar(currentX + 1, currentY + 1); // Placeholder behaviour
+      targetAngle += PI/2;
+      currentState = ROTATING;
+      obstacleFlag = true;
     }
   }
 
@@ -472,6 +480,15 @@ void controlRotation() {
     Serial1.print(yawAngle * 180.0 / PI);
     Serial1.print(" | Error: ");
     Serial1.println(error);
+
+    if (obstacleFlag) {
+      Serial1.println("This rotation was done because an obstacle was detected.");
+      Serial1.println("Feed the heading (yawAngle) to the model to get new target coordinates.");
+      Serial1.print("Current heading (yaw) angle: ");
+      Serial1.println(yawAngle);
+      obstacleFlag = false;
+      return;
+    }
 
     // Transition to forward movement
     currentState = MOVING_FORWARD;
