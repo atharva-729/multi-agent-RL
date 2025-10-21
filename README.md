@@ -1,6 +1,6 @@
 
 # Multi-Agent Reinforcement Learning
-This project focuses on making three robots from scratch.
+This project focused on designing and assembling three ground robots to study how multiple agents can learn to work together in a shared environment. Each robot was built from scratch using Arduino and included encoders, IMUs, and ultrasonic sensors for motion tracking and obstacle detection. I developed a control system that handled movement, communication, and decision-making in real time. To make the robots more reliable, I also built a Bayesian framework to model how different failures could occur and affect learning.
 
 ---
 
